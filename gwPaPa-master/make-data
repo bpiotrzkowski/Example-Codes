@@ -1,0 +1,96 @@
+#!/usr/bin/env python
+"""
+This script makes data for brando.
+Ignacio Magana
+"""
+# System imports
+import os
+import sys
+import shutil
+import glob
+from optparse import Option, OptionParser
+
+import math
+import lal
+import lalframe
+import lalsimulation
+import numpy as np
+import pickle
+from injections import simulate_merger, bbh_mass_distribution
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+# Command line options
+parser = OptionParser(
+    description = __doc__,
+    usage = "%prog [options]",
+    option_list = [
+        Option("-n", "--number_of_injections", metavar="INJECTIONS", default=None,
+            help="INJECTIONS: How many fucking injections brotha (required)"),
+        Option("-e", "--event_type", metavar="EVENT", default=None,
+            help="EVENT: Select BBH/BNS (required)"),
+        Option("-o", "--output_directory", metavar="DIRECTORY", default='./',
+            help="DIRECTORY: Specify output directory name")
+    ])
+opts, args = parser.parse_args()
+print(opts)
+print(args)
+
+# Check for missing required arguments
+missing = []
+for option in parser.option_list:
+    if 'required' in option.help and eval('opts.' + option.dest) == None:
+        missing.extend(option._long_opts)
+if len(missing) > 0:
+    parser.error('Missing required options: {0}'.format(str(missing)))
+
+N = int(float(opts.number_of_injections))
+event_type = str(opts.event_type)
+
+dir_name = str(opts.output_directory)
+try:
+    os.mkdir( dir_name, 0o755 ) ## it creates the destination folder
+except:
+    print("Folder already exist or some error")
+    sys.exit(1)
+    
+masses = []
+injections=[]
+if event_type == 'BNS':
+    while len(masses)<N:
+        m1 = np.random.normal(1.35,0.15)
+        m2 = np.random.normal(1.35,0.15)
+        if m2 > m1:
+            m3 = m2
+            m2 = m1
+            m1 = m3
+        masses.append([m1,m2])
+
+    injections=[]
+    for k in range(len(masses)):
+        injections.append(simulate_merger(masses[k][0],masses[k][1],'BNS-'+str(k+1)))
+    
+    pickle.dump( injections, open("./"+ dir_name+"/injections-BNS.p", "wb" ) )
+
+elif event_type == 'BBH':
+    m1 = bbh_mass_distribution(np.random.rand(N),5.,50.,-1.)
+    m2 = np.random.uniform(low=5.0,high=m1)
+
+    for k in range(len(m1)):
+        injections.append(simulate_merger(m1[k],m2[k],'BBH-'+str(k+1)))
+
+    pickle.dump( injections, open("./"+ dir_name+"/injections-BBH.p", "wb" ) )
+
+source = './'
+mydict = {'./'+dir_name: ['gwf']}
+for destination, extensions in mydict.items():
+    for ext in extensions:
+        for file in glob.glob(source + '*.' + ext):
+            print(file)
+            shutil.move(file, destination)
