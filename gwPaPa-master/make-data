@@ -16,6 +16,7 @@ import lalframe
 import lalsimulation
 import numpy as np
 import pickle
+from pycbc import frame
 from injections import simulate_merger, bbh_mass_distribution
 
 def str2bool(v):
@@ -50,47 +51,61 @@ for option in parser.option_list:
 if len(missing) > 0:
     parser.error('Missing required options: {0}'.format(str(missing)))
 
-N = int(float(opts.number_of_injections))
-event_type = str(opts.event_type)
+def main():
+    dir_name = str(opts.output_directory)
+    try:
+        os.mkdir( dir_name, 0o755 ) ## it creates the destination folder
+    except:
+        print("Folder already exist or some error")
+        sys.exit(1)
 
-dir_name = str(opts.output_directory)
-try:
-    os.mkdir( dir_name, 0o755 ) ## it creates the destination folder
-except:
-    print("Folder already exist or some error")
-    sys.exit(1)
-    
-masses = []
-injections=[]
-if event_type == 'BNS':
-    while len(masses)<N:
-        m1 = np.random.normal(1.35,0.15)
-        m2 = np.random.normal(1.35,0.15)
-        if m2 > m1:
-            m3 = m2
-            m2 = m1
-            m1 = m3
-        masses.append([m1,m2])
+    N = int(float(opts.number_of_injections))
+    event_type = str(opts.event_type)
 
+    masses = []
     injections=[]
-    for k in range(len(masses)):
-        injections.append(simulate_merger(masses[k][0],masses[k][1],'BNS-'+str(k+1)))
-    
-    pickle.dump( injections, open("./"+ dir_name+"/injections-BNS.p", "wb" ) )
+    if event_type == 'BNS':
+        while len(masses)<N:
+            m1 = np.random.normal(1.35,0.15)
+            m2 = np.random.normal(1.35,0.15)
+            if m2 > m1:
+                m3 = m2
+                m2 = m1
+                m1 = m3
+            masses.append([m1,m2])
 
-elif event_type == 'BBH':
-    m1 = bbh_mass_distribution(np.random.rand(N),5.,50.,-1.)
-    m2 = np.random.uniform(low=5.0,high=m1)
+        injections=[]
+        for k in range(len(masses)):
+            params = simulate_merger(masses[k][0],masses[k][1],'BNS-'+str(k+1))
+            start_time = params['start_time']
+            duration = params['duration']
+            filename = 'L-L1_STRAIN-'+str(start_time)+'-'+str(duration)
+            data = frame.read_frame(filename+'.gwf', 'L1:STRAIN')
+            injections.append([params, data])
+        
+        pickle.dump( injections, open("./"+ dir_name+"/injections-BNS.p", "wb" ) )
 
-    for k in range(len(m1)):
-        injections.append(simulate_merger(m1[k],m2[k],'BBH-'+str(k+1)))
+    elif event_type == 'BBH':
+        m1 = bbh_mass_distribution(np.random.rand(N),5.,50.,-1.)
+        m2 = np.random.uniform(low=5.0,high=m1)
 
-    pickle.dump( injections, open("./"+ dir_name+"/injections-BBH.p", "wb" ) )
+        for k in range(len(m1)):
+            params = simulate_merger(m1[k],m2[k],'BBH-'+str(k+1))
+            start_time = params['start_time']
+            duration = params['duration']
+            filename = 'L-L1_STRAIN-'+str(start_time)+'-'+str(duration)
+            data = frame.read_frame(filename+'.gwf', 'L1:STRAIN')
+            injections.append([params, data])
 
-source = './'
-mydict = {'./'+dir_name: ['gwf']}
-for destination, extensions in mydict.items():
-    for ext in extensions:
-        for file in glob.glob(source + '*.' + ext):
-            print(file)
-            shutil.move(file, destination)
+        pickle.dump( injections, open("./"+ dir_name+"/injections-BBH.p", "wb" ) )
+
+    source = './'
+    mydict = {'./'+dir_name: ['gwf']}
+    for destination, extensions in mydict.items():
+        for ext in extensions:
+            for file in glob.glob(source + '*.' + ext):
+                print(file)
+                shutil.move(file, destination)
+
+if __name__ == "__main__":
+    main()

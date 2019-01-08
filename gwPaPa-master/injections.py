@@ -19,7 +19,7 @@ def simulate_merger(mass1,mass2,sim_id):
     # details about the injection and fixed parameters
     waveform = 'IMRPhenomPv2pseudoFourPN'
     approximant = lalsimulation.GetApproximantFromString(str(waveform))
-    geocentric_end_time = 1186741861.5268
+    geocentric_end_time = 1000
     right_ascension = 0.3
     declination = -0.4
     inclination = 0.0
@@ -59,9 +59,7 @@ def simulate_merger(mass1,mass2,sim_id):
     h_plus.epoch += geocentric_end_time
     h_cross.epoch += geocentric_end_time
 
-
     # compute strain in detector
-
     detector = lalsimulation.DetectorPrefixToLALDetector(detector_prefix)
     h = lalsimulation.SimDetectorStrainREAL8TimeSeries(
         hplus = h_plus,
@@ -98,14 +96,10 @@ def simulate_merger(mass1,mass2,sim_id):
     # zero the data
     time_series.data.data[:] = 0.0
 
-
     # add the injection to the detector time series
-
     lalsimulation.SimAddInjectionREAL8TimeSeries(time_series, h, None)
 
-
     # output the detector time series to a frame file
-
     lalframe.FrWriteREAL8TimeSeries(time_series, 0)
     theta = {
         'sim-id' : sim_id,
@@ -126,8 +120,9 @@ def simulate_merger(mass1,mass2,sim_id):
         'lambda1' : lambda1,
         'lambda2' : lambda2,
         'f_min' : low_frequency,
-        'f_ref' : 0.0,
-        'approximant' : approximant,
+        'f_ref' : 20.0,
         'deltaT' : 1.0 / sample_rate,
+        'start_time' : start_time,
+        'duration' : duration
     }
     return theta
