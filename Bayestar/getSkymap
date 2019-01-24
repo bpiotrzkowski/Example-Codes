@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+import os
+import io
+import sys
+import argparse
+
+from lxml import etree
+from ligo.skymap import bayestar
+from ligo.skymap.io import events
+from ligo.skymap.io import fits
+
+from ligo.gracedb.rest import GraceDb
+
+
+
+def getSkymap(coincfile=None, psdfile=None, graceid=None, output="Test"):
+    if graceid:
+        print('Fetching data from gracedb...')
+        gdb = GraceDb("https://gracedb.ligo.org/api/")
+        coincfile = 'coinc_' + graceid + '.xml'
+        coincfileobj = open(coincfile, 'wb')
+        r = gdb.files(graceid, 'coinc.xml')
+        coincfileobj.write(r.read())
+        coincfileobj.close()
+
+        psdfile = 'psd_' + graceid + '.xml.gz'
+        psdfileobj = open(psdfile, 'wb')
+        r = gdb.files(graceid, 'psd.xml.gz')
+        psdfileobj.write(r.read())
+        psdfileobj.close()
+
+
+    coinc_tree = etree.parse(coincfile)
+    coinc_content = etree.tostring(coinc_tree.getroot())
+    psd_tree = etree.parse(psdfile)
+    psd_content = etree.tostring(psd_tree.getroot())
+    coinc = io.BytesIO(coinc_content)
+    psd = io.BytesIO(psd_content)
+    event_source = events.ligolw.open(coinc, psd_file=psd, coinc_def=None)
+    event, = event_source.values()
+    skymap = bayestar.localize(event, enable_snr_series=False)
+    prob = skymap['PROBDENSITY'].data
+    outfilename = 'bayestar_' + output + '.fits.gz'
+    fits.write_sky_map(outfilename, skymap, moc=True)
+    return skymap
+
+def convertSkyMap(skymapfile):
+    import healpy as hp
+
+    skymap = fits.read_sky_map(skymapfile)
+    outfilename = skymapfile.split('.fits.gz')[0] + '_old_format'+ '.fits.gz'
+    hp.write_map(outfilename, skymap[0])
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-C", "--coinc", action="store", type=str, default=None,
+                    help="Name of the coinc file")
+parser.add_argument("-P", "--psd", action="store", type=str, default=None,
+                    help="Name of the psd file")
+parser.add_argument("-O", "--output", action="store", type=str, default=None,
+                    help="Name of the output fits file name tag")
+parser.add_argument("-G", "--graceid", action="store", type=str, default=None,
+                    help="GraceDb ID")
+args = parser.parse_args()
+
+if args.graceid is None:
+    if (args.coinc is not None) and (args.psd is not None): 
+        if os.path.exists(args.coinc) and os.path.exists(args.psd):
+            getSkymap(coincfile=args.coinc, psdfile=args.psd, output=args.output)
+            outfilename = 'bayestar_' + args.output + '.fits.gz'
+            convertSkyMap(outfilename)
+        else:
+            print('Give valid coinc and psd files')
+            sys.exit(0)
+    else:
+        print('Must supplit either coinc and psd file or graceid')
+        sys.exit(0)
+
+else:
+    getSkymap(graceid=args.graceid, output=args.output)
+
+
